@@ -4,11 +4,21 @@ import {
   CircleMarker,
   Popup,
   Polyline,
+  Tooltip,
 } from "react-leaflet";
+
+import { useEffect, useState } from "react";
 
 import "leaflet/dist/leaflet.css";
 
-import { bins, trucks } from "../data/mockData";
+import {
+  bins,
+  trucks,
+} from "../data/mockData";
+
+import {
+  buildSmartRoute,
+} from "../utils/routeLogicNew";
 
 function getBinColor(fillLevel) {
   if (fillLevel >= 90) return "#ef4444";
@@ -23,20 +33,142 @@ function getTruckColor(status) {
   return "#16a34a";
 }
 
-export default function CityMap() {
+export default function CityMap({
+  recommendedBinId,
+  selectedTruckId,
+}) {
   const center = [10.014, 76.325];
 
-  const priorityBins = [...bins]
-    .sort((a, b) => b.fillLevel - a.fillLevel)
-    .slice(0, 4);
+  const [roadRoute, setRoadRoute] = useState([]);
+
+  const selectedTruck =
+    trucks.find(
+      (truck) =>
+        truck.id === selectedTruckId
+    ) || trucks[0];
+
+  const smartRoute = buildSmartRoute(
+    bins,
+    selectedTruck
+  );
+
+  /*
+    Build the complete route:
+    Truck → Stop 1 → Stop 2 → Stop 3...
+  */
 
   const routePoints = [
-    [trucks[0].latitude, trucks[0].longitude],
-    ...priorityBins.map((bin) => [
-      bin.latitude,
-      bin.longitude,
-    ]),
+    {
+      latitude: selectedTruck.latitude,
+      longitude: selectedTruck.longitude,
+    },
+
+    ...smartRoute.route.map(
+      (stop) => ({
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+      })
+    ),
   ];
+
+  /*
+    Request road geometry from OSRM
+  */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRoadRoute() {
+      if (routePoints.length < 2) {
+        setRoadRoute([]);
+        return;
+      }
+
+      try {
+        const coordinates =
+          routePoints
+            .map(
+              (point) =>
+                `${point.longitude},${point.latitude}`
+            )
+            .join(";");
+
+        const url =
+          `https://router.project-osrm.org/route/v1/driving/` +
+          `${coordinates}` +
+          `?overview=full&geometries=geojson`;
+
+        const response =
+          await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(
+            "Routing request failed"
+          );
+        }
+
+        const data =
+          await response.json();
+
+        if (
+          !cancelled &&
+          data.routes &&
+          data.routes.length > 0
+        ) {
+          const coordinates =
+            data.routes[0].geometry
+              .coordinates;
+
+          /*
+            OSRM gives:
+            [longitude, latitude]
+
+            Leaflet needs:
+            [latitude, longitude]
+          */
+
+          const leafletCoordinates =
+            coordinates.map(
+              ([longitude, latitude]) => [
+                latitude,
+                longitude,
+              ]
+            );
+
+          setRoadRoute(
+            leafletCoordinates
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Road routing error:",
+          error
+        );
+
+        /*
+          Fallback to straight route
+          if OSRM is unavailable.
+        */
+
+        if (!cancelled) {
+          setRoadRoute(
+            routePoints.map(
+              (point) => [
+                point.latitude,
+                point.longitude,
+              ]
+            )
+          );
+        }
+      }
+    }
+
+    loadRoadRoute();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTruckId]);
 
   return (
     <MapContainer
@@ -48,127 +180,270 @@ export default function CityMap() {
         height: "100%",
       }}
     >
-
       <TileLayer
-        attribution='&copy; OpenStreetMap contributors'
+        attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      {/* WASTE BINS */}
+      {/* =================================================
+          REAL ROAD ROUTE
+      ================================================= */}
 
-      {bins.map((bin) => (
-        <CircleMarker
-          key={bin.id}
-          center={[
-            bin.latitude,
-            bin.longitude,
-          ]}
-          radius={9}
+      {roadRoute.length > 1 && (
+        <Polyline
+          positions={roadRoute}
           pathOptions={{
-            color: getBinColor(bin.fillLevel),
-            fillColor: getBinColor(bin.fillLevel),
-            fillOpacity: 0.85,
-            weight: 2,
+            color: "#7c3aed",
+            weight: 5,
+            opacity: 0.9,
           }}
-        >
+        />
+      )}
 
-          <Popup>
+      {/* =================================================
+          BIN MARKERS
+      ================================================= */}
 
-            <strong>
-              {bin.id}
-            </strong>
+      {bins.map((bin) => {
+        const routeStop =
+          smartRoute.route.find(
+            (stop) =>
+              stop.binId === bin.id
+          );
 
-            <br />
+        const isRecommended =
+          bin.id === recommendedBinId;
 
-            <strong>
-              {bin.location}
-            </strong>
+        const isRouteStop =
+          Boolean(routeStop);
 
-            <br />
+        return (
+          <CircleMarker
+            key={bin.id}
+            center={[
+              bin.latitude,
+              bin.longitude,
+            ]}
+            radius={
+              isRecommended
+                ? 15
+                : isRouteStop
+                ? 12
+                : 9
+            }
+            pathOptions={{
+              color:
+                isRecommended
+                  ? "#7c3aed"
+                  : isRouteStop
+                  ? "#6366f1"
+                  : getBinColor(
+                      bin.fillLevel
+                    ),
 
-            Fill Level: {bin.fillLevel}%
+              fillColor:
+                isRecommended
+                  ? "#a855f7"
+                  : isRouteStop
+                  ? "#818cf8"
+                  : getBinColor(
+                      bin.fillLevel
+                    ),
 
-            <br />
+              fillOpacity: 0.9,
 
-            Waste: {bin.currentWeightKg} kg
+              weight:
+                isRecommended
+                  ? 4
+                  : isRouteStop
+                  ? 3
+                  : 2,
+            }}
+          >
+            {isRouteStop && (
+              <Tooltip
+                permanent
+                direction="top"
+                offset={[0, -10]}
+              >
+                <strong>
+                  {routeStop.sequence}
+                </strong>
+              </Tooltip>
+            )}
 
-            <br />
+            <Popup>
+              <strong>
+                {bin.id}
+              </strong>
 
-            Status: {bin.status}
+              <br />
 
-            <br />
+              <strong>
+                {bin.location}
+              </strong>
 
-            Type: {bin.wasteType}
+              <br />
 
-          </Popup>
+              Fill Level:{" "}
+              {bin.fillLevel}%
 
-        </CircleMarker>
-      ))}
+              <br />
 
-      {/* TRUCKS */}
+              Waste:{" "}
+              {bin.currentWeightKg} kg
 
-      {trucks.map((truck) => (
-        <CircleMarker
-          key={truck.id}
-          center={[
-            truck.latitude,
-            truck.longitude,
-          ]}
-          radius={12}
-          pathOptions={{
-            color: "#1d4ed8",
-            fillColor: getTruckColor(
-              truck.status
-            ),
-            fillOpacity: 1,
-            weight: 3,
-          }}
-        >
+              <br />
 
-          <Popup>
+              Status:{" "}
+              {bin.status}
 
-            <strong>
-              {truck.name}
-            </strong>
+              <br />
 
-            <br />
+              Type:{" "}
+              {bin.wasteType}
 
-            Driver: {truck.driver}
+              {isRouteStop && (
+                <>
+                  <br />
+                  <br />
 
-            <br />
+                  <strong>
+                    🚛 Route Stop #
+                    {routeStop.sequence}
+                  </strong>
 
-            Status: {truck.status}
+                  <br />
 
-            <br />
+                  Distance from previous:{" "}
+                  {
+                    routeStop.distanceFromPreviousKm
+                  }{" "}
+                  km
 
-            Load: {truck.currentLoadKg} kg
+                  <br />
 
-            <br />
+                  Priority Score:{" "}
+                  {routeStop.priorityScore}/100
+                </>
+              )}
 
-            Capacity: {truck.capacityKg} kg
+              {isRecommended && (
+                <>
+                  <br />
+                  <br />
 
-            <br />
+                  <strong>
+                    🎯 AI Recommended Next Stop
+                  </strong>
+                </>
+              )}
+            </Popup>
+          </CircleMarker>
+        );
+      })}
 
-            Fuel: {truck.fuelPercentage}%
+      {/* =================================================
+          TRUCK MARKERS
+      ================================================= */}
 
-          </Popup>
+      {trucks.map((truck) => {
+        const isSelected =
+          truck.id === selectedTruckId;
 
-        </CircleMarker>
-      ))}
+        return (
+          <CircleMarker
+            key={truck.id}
+            center={[
+              truck.latitude,
+              truck.longitude,
+            ]}
+            radius={
+              isSelected
+                ? 15
+                : 10
+            }
+            pathOptions={{
+              color:
+                isSelected
+                  ? "#7c3aed"
+                  : "#1d4ed8",
 
-      {/* ROUTE PREVIEW */}
+              fillColor:
+                getTruckColor(
+                  truck.status
+                ),
 
-      <Polyline
-        positions={routePoints}
-        pathOptions={{
-          color: "#2563eb",
-          weight: 4,
-          opacity: 0.8,
-          dashArray: "8 8",
-        }}
-      />
+              fillOpacity: 1,
 
+              weight:
+                isSelected
+                  ? 5
+                  : 3,
+            }}
+          >
+            <Tooltip>
+              {isSelected
+                ? "🚛 Active Truck"
+                : truck.name}
+            </Tooltip>
+
+            <Popup>
+              <strong>
+                {truck.name}
+              </strong>
+
+              <br />
+
+              Driver:{" "}
+              {truck.driver}
+
+              <br />
+
+              Status:{" "}
+              {truck.status}
+
+              <br />
+
+              Load:{" "}
+              {truck.currentLoadKg} kg
+
+              <br />
+
+              Capacity:{" "}
+              {truck.capacityKg} kg
+
+              <br />
+
+              Fuel:{" "}
+              {truck.fuelPercentage}%
+
+              {isSelected && (
+                <>
+                  <br />
+                  <br />
+
+                  <strong>
+                    🚛 Active Truck
+                  </strong>
+
+                  <br />
+
+                  Route Stops:{" "}
+                  {smartRoute.totalStops}
+
+                  <br />
+
+                  Road Distance:{" "}
+                  {roadRoute.length > 0
+                    ? "Calculated"
+                    : "Loading..."}
+                </>
+              )}
+            </Popup>
+          </CircleMarker>
+        );
+      })}
     </MapContainer>
   );
 }
-

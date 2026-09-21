@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import "./App.css";
 import CityMap from "./components/CityMap";
 
@@ -9,14 +10,26 @@ import {
   getTruckCapacityPercentage,
 } from "./data/mockData";
 
-import { rankBinsForTruck } from "./utils/routeLogic";
+import {
+  rankBinsForTruck,
+  selectBestTruck,
+  buildSmartRoute,
+} from "./utils/routeLogicNew";
+import { getRoadRoute } from "./utils/roadRouting";
 
 function App() {
-  // ==========================================
-  // CURRENT TRUCK
-  // ==========================================
+  const [selectedTruckId, setSelectedTruckId] = useState(
+    trucks[0].id
+  );
+  const [roadRouteData, setRoadRouteData] = useState({
+  distanceKm: 0,
+  durationMinutes: 0,
+});
 
-  const currentTruck = trucks[0];
+  const currentTruck =
+    trucks.find(
+      (truck) => truck.id === selectedTruckId
+    ) || trucks[0];
 
   const remainingCapacity =
     getRemainingCapacity(currentTruck);
@@ -24,21 +37,9 @@ function App() {
   const truckCapacityPercentage =
     getTruckCapacityPercentage(currentTruck);
 
-  // ==========================================
-  // CRITICAL BINS
-  // ==========================================
-
-  const criticalBins = bins
-    .filter((bin) => bin.fillLevel >= 85)
-    .sort(
-      (a, b) =>
-        b.fillLevel - a.fillLevel
-    )
-    .slice(0, 3);
-
-  // ==========================================
-  // AI ROUTE RANKING
-  // ==========================================
+  /* =====================================================
+     AI BIN PRIORITY
+  ===================================================== */
 
   const rankedBins = rankBinsForTruck(
     bins,
@@ -46,28 +47,90 @@ function App() {
   );
 
   const highestPriorityBin =
-    rankedBins[0];
+    rankedBins.find(
+      (bin) => bin.priorityScore > 0
+    );
+
+  const recommendedBin = bins.find(
+    (bin) =>
+      bin.id === highestPriorityBin?.binId
+  );
+
+  /* =====================================================
+     BEST TRUCK FOR RECOMMENDED BIN
+  ===================================================== */
+
+  const bestTruck = recommendedBin
+    ? selectBestTruck(
+        recommendedBin,
+        trucks
+      )
+    : null;
+
+  /* =====================================================
+     SMART MULTI-STOP ROUTE
+  ===================================================== */
+
+  const smartRoute = buildSmartRoute(
+    bins,
+    currentTruck
+  );
+  useEffect(() => {
+  async function calculateRoadDistance() {
+    const points = [
+      {
+        latitude: currentTruck.latitude,
+        longitude: currentTruck.longitude,
+      },
+
+      ...smartRoute.route.map((stop) => ({
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+      })),
+    ];
+
+    const result = await getRoadRoute(points);
+
+    setRoadRouteData(result);
+  }
+
+  calculateRoadDistance();
+}, [selectedTruckId]);
+
+  /* =====================================================
+     CRITICAL BINS
+  ===================================================== */
+
+  const criticalBins = bins
+    .filter(
+      (bin) => bin.fillLevel >= 85
+    )
+    .sort(
+      (a, b) =>
+        b.fillLevel - a.fillLevel
+    )
+    .slice(0, 3);
 
   return (
     <div className="app">
 
-      {/* ======================================
+      {/* =================================================
           SIDEBAR
-      ====================================== */}
+      ================================================= */}
 
       <aside className="sidebar">
 
         <div className="logo-section">
-
           <div className="logo-icon">
             ♻
           </div>
 
-          <div>
+          <div className="logo-text">
             <h1>SmartRoute</h1>
-            <span>Waste Management</span>
+            <span>
+              Waste Management
+            </span>
           </div>
-
         </div>
 
         <nav className="sidebar-nav">
@@ -78,77 +141,112 @@ function App() {
 
           <a className="nav-item active">
             <span>▣</span>
-            Dashboard
+            <span>Dashboard</span>
           </a>
 
           <a className="nav-item">
             <span>◉</span>
-            Live Map
+            <span>Live Map</span>
           </a>
 
           <a className="nav-item">
             <span>🚛</span>
-            Trucks
+            <span>Trucks</span>
           </a>
 
           <a className="nav-item">
             <span>🗑</span>
-            Bins
+            <span>Bins</span>
           </a>
 
           <a className="nav-item">
             <span>↗</span>
-            Route Planner
+            <span>Route Planner</span>
           </a>
 
           <a className="nav-item">
             <span>▥</span>
-            Analytics
+            <span>Analytics</span>
           </a>
 
         </nav>
 
         <div className="sidebar-status">
-
           <div className="status-dot"></div>
 
           <div>
-            <strong>System Online</strong>
-            <span>All services operational</span>
-          </div>
+            <strong>
+              System Online
+            </strong>
 
+            <span>
+              All services operational
+            </span>
+          </div>
         </div>
 
       </aside>
 
-
-      {/* ======================================
+      {/* =================================================
           MAIN CONTENT
-      ====================================== */}
+      ================================================= */}
 
       <main className="main-content">
 
-        {/* ====================================
+        {/* =================================================
             TOP BAR
-        ==================================== */}
+        ================================================= */}
 
         <header className="topbar">
 
-          <div>
-
-            <h2>City Dashboard</h2>
+          <div className="page-heading">
+            <h2>
+              City Dashboard
+            </h2>
 
             <p>
-              Intelligent waste collection
-              monitoring
+              Intelligent waste collection monitoring
             </p>
-
           </div>
 
           <div className="topbar-right">
 
+            {/* ACTIVE TRUCK */}
+
+            <div className="truck-selector">
+
+              <label htmlFor="truckSelect">
+                Active Truck
+              </label>
+
+              <select
+                id="truckSelect"
+                value={selectedTruckId}
+                onChange={(e) =>
+                  setSelectedTruckId(
+                    e.target.value
+                  )
+                }
+              >
+
+                {trucks.map((truck) => (
+                  <option
+                    key={truck.id}
+                    value={truck.id}
+                  >
+                    {truck.name}
+                  </option>
+                ))}
+
+              </select>
+
+            </div>
+
             <div className="date-display">
-              📅 19 September 2026
+              📅
+              <span>
+                21 September 2026
+              </span>
             </div>
 
             <div className="user-profile">
@@ -157,9 +255,16 @@ function App() {
                 A
               </div>
 
-              <div>
-                <strong>Admin</strong>
-                <span>City Operator</span>
+              <div className="user-details">
+
+                <strong>
+                  Admin
+                </strong>
+
+                <span>
+                  City Operator
+                </span>
+
               </div>
 
             </div>
@@ -168,17 +273,15 @@ function App() {
 
         </header>
 
-
-        {/* ====================================
-            DASHBOARD CONTENT
-        ==================================== */}
+        {/* =================================================
+            DASHBOARD
+        ================================================= */}
 
         <section className="dashboard-content">
 
-
-          {/* ==================================
+          {/* =================================================
               STAT CARDS
-          ================================== */}
+          ================================================= */}
 
           <div className="stats-grid">
 
@@ -188,9 +291,11 @@ function App() {
                 🗑
               </div>
 
-              <div>
+              <div className="stat-content">
 
-                <span>Total Bins</span>
+                <span>
+                  Total Bins
+                </span>
 
                 <strong>
                   {cityStats.totalBins}
@@ -204,16 +309,17 @@ function App() {
 
             </div>
 
-
             <div className="stat-card">
 
               <div className="stat-icon red">
                 ⚠
               </div>
 
-              <div>
+              <div className="stat-content">
 
-                <span>Critical Bins</span>
+                <span>
+                  Critical Bins
+                </span>
 
                 <strong>
                   {cityStats.criticalBins}
@@ -227,16 +333,17 @@ function App() {
 
             </div>
 
-
             <div className="stat-card">
 
               <div className="stat-icon green">
                 🚛
               </div>
 
-              <div>
+              <div className="stat-content">
 
-                <span>Active Trucks</span>
+                <span>
+                  Active Trucks
+                </span>
 
                 <strong>
                   {cityStats.activeTrucks}
@@ -250,23 +357,27 @@ function App() {
 
             </div>
 
-
             <div className="stat-card">
 
               <div className="stat-icon purple">
                 ♻
               </div>
 
-              <div>
+              <div className="stat-content">
 
-                <span>Waste Collected</span>
+                <span>
+                  Waste Collected
+                </span>
 
                 <strong>
                   {cityStats.totalWasteCollectedToday}
+                  <small className="unit">
+                    {" "}kg
+                  </small>
                 </strong>
 
                 <small>
-                  kg collected today
+                  collected today
                 </small>
 
               </div>
@@ -275,13 +386,11 @@ function App() {
 
           </div>
 
-
-          {/* ==================================
+          {/* =================================================
               MAP + TRUCK STATUS
-          ================================== */}
+          ================================================= */}
 
           <div className="dashboard-grid">
-
 
             {/* MAP */}
 
@@ -291,33 +400,39 @@ function App() {
 
                 <div>
 
-                  <h2>Live City Map</h2>
+                  <h2>
+                    Live City Map
+                  </h2>
 
                   <p>
-                    Real-time bin and truck
-                    locations
+                    Real-time bin and truck locations
                   </p>
 
                 </div>
 
                 <span className="live-badge">
+
                   <span></span>
+
                   LIVE
+
                 </span>
 
               </div>
-
 
               <div className="map-area">
 
                 <CityMap
                   recommendedBinId={
-                    highestPriorityBin.binId
+                    highestPriorityBin?.binId
+                  }
+
+                  selectedTruckId={
+                    selectedTruckId
                   }
                 />
 
               </div>
-
 
               <div className="map-legend">
 
@@ -350,7 +465,6 @@ function App() {
 
             </div>
 
-
             {/* TRUCK STATUS */}
 
             <div className="panel truck-panel">
@@ -359,7 +473,9 @@ function App() {
 
                 <div>
 
-                  <h2>Truck Status</h2>
+                  <h2>
+                    Truck Status
+                  </h2>
 
                   <p>
                     Fleet overview
@@ -373,14 +489,22 @@ function App() {
 
               </div>
 
-
               <div className="truck-list">
 
                 {trucks.map((truck) => (
 
                   <div
-                    className="truck-item"
+                    className={`truck-item ${
+                      truck.id === selectedTruckId
+                        ? "selected"
+                        : ""
+                    }`}
                     key={truck.id}
+                    onClick={() =>
+                      setSelectedTruckId(
+                        truck.id
+                      )
+                    }
                   >
 
                     <div className="truck-icon">
@@ -403,7 +527,9 @@ function App() {
 
                       <div>
 
-                        <span>Load</span>
+                        <span>
+                          Load
+                        </span>
 
                         <strong>
                           {Math.round(
@@ -417,7 +543,9 @@ function App() {
 
                       <div>
 
-                        <span>Fuel</span>
+                        <span>
+                          Fuel
+                        </span>
 
                         <strong>
                           {truck.fuelPercentage}%
@@ -430,7 +558,10 @@ function App() {
                     <span
                       className={`truck-status ${truck.status
                         .toLowerCase()
-                        .replace(" ", "-")}`}
+                        .replace(
+                          " ",
+                          "-"
+                        )}`}
                     >
                       {truck.status}
                     </span>
@@ -445,17 +576,13 @@ function App() {
 
           </div>
 
-
-          {/* ==================================
+          {/* =================================================
               LOWER GRID
-          ================================== */}
+          ================================================= */}
 
           <div className="lower-grid">
 
-
-            {/* =================================
-                CRITICAL BINS
-            ================================= */}
+            {/* CRITICAL BINS */}
 
             <div className="panel critical-panel">
 
@@ -463,7 +590,9 @@ function App() {
 
                 <div>
 
-                  <h2>Critical Bins</h2>
+                  <h2>
+                    Critical Bins
+                  </h2>
 
                   <p>
                     Bins requiring attention
@@ -476,7 +605,6 @@ function App() {
                 </span>
 
               </div>
-
 
               <div className="critical-list">
 
@@ -510,7 +638,9 @@ function App() {
                         {bin.fillLevel}%
                       </strong>
 
-                      <span>Full</span>
+                      <span>
+                        Full
+                      </span>
 
                     </div>
 
@@ -522,10 +652,7 @@ function App() {
 
             </div>
 
-
-            {/* =================================
-                RECOMMENDED ROUTE
-            ================================= */}
+            {/* SMART ROUTE */}
 
             <div className="panel route-panel">
 
@@ -534,11 +661,11 @@ function App() {
                 <div>
 
                   <h2>
-                    Recommended Route
+                    Smart Route Planner
                   </h2>
 
                   <p>
-                    AI-based route recommendation
+                    AI-based multi-stop route
                   </p>
 
                 </div>
@@ -549,8 +676,7 @@ function App() {
 
               </div>
 
-
-              {/* SMART RECOMMENDATION */}
+              {/* ROUTE SUMMARY */}
 
               <div className="smart-recommendation">
 
@@ -565,20 +691,90 @@ function App() {
                   </span>
 
                   <strong>
-                    {highestPriorityBin.location}
+                    {highestPriorityBin?.location ||
+                      "No suitable bin"}
                   </strong>
 
                   <small>
-                    {highestPriorityBin.binId} •{" "}
-                    {highestPriorityBin.distanceKm} km
-                    away • Priority Score:{" "}
-                    {highestPriorityBin.priorityScore}
+                    {highestPriorityBin
+                      ? `${highestPriorityBin.binId} • ${highestPriorityBin.distanceKm} km away • Priority Score: ${highestPriorityBin.priorityScore}/100`
+                      : "No suitable collection point"}
                   </small>
 
                 </div>
 
               </div>
 
+              {/* ROUTE METRICS */}
+
+              <div className="route-summary">
+
+                <div>
+
+                  <span>
+                    Stops
+                  </span>
+
+                  <strong>
+                    {smartRoute.totalStops}
+                  </strong>
+
+                </div>
+
+                <div>
+
+                  <span>
+                    Distance
+                  </span>
+
+                  <strong>
+                    {roadRouteData.distanceKm > 0
+                    ? `${roadRouteData.distanceKm} km`
+                    : "Calculating..."}
+                  </strong>
+
+                </div>
+
+                <div>
+
+                  <span>
+                    Waste
+                  </span>
+
+                  <strong>
+                    {smartRoute.totalWasteKg} kg
+                  </strong>
+
+                </div>
+
+                <div>
+
+                  <span>
+                    Fuel
+                  </span>
+
+                  <strong>
+                    {roadRouteData.distanceKm > 0
+                    ? `${(
+                      roadRouteData.distanceKm /
+                      currentTruck.fuelEfficiency
+                    ).toFixed(2)} L`
+                    : "Calculating..."}
+                  </strong>
+
+                </div>
+                <div>
+                  <span>
+                    Travel Time
+                    </span>
+                    <strong>
+                      {roadRouteData.durationMinutes > 0
+                      ? `${roadRouteData.durationMinutes} min`
+                      : "Calculating..."}
+                      </strong>
+                      </div>
+
+              </div>
 
               {/* ROUTE DETAILS */}
 
@@ -587,7 +783,7 @@ function App() {
                 <div className="route-detail-row">
 
                   <span>
-                    Truck
+                    Selected Truck
                   </span>
 
                   <strong>
@@ -596,50 +792,46 @@ function App() {
 
                 </div>
 
-
                 <div className="route-detail-row">
 
                   <span>
-                    Next Stop
+                    Truck Status
                   </span>
 
                   <strong>
-                    {highestPriorityBin.location}
+                    {currentTruck.status}
                   </strong>
 
                 </div>
 
-
                 <div className="route-detail-row">
 
                   <span>
-                    Distance
+                    Fuel Level
                   </span>
 
                   <strong>
-                    {highestPriorityBin.distanceKm} km
+                    {currentTruck.fuelPercentage}%
                   </strong>
 
                 </div>
 
-
                 <div className="route-detail-row">
 
                   <span>
-                    Waste to Collect
+                    Fuel Efficiency
                   </span>
 
                   <strong>
-                    {highestPriorityBin.wasteKg} kg
+                    {currentTruck.fuelEfficiency} km/L
                   </strong>
 
                 </div>
 
-
                 <div className="route-detail-row">
 
                   <span>
-                    Remaining Truck Capacity
+                    Remaining Capacity
                   </span>
 
                   <strong>
@@ -648,27 +840,7 @@ function App() {
 
                 </div>
 
-
                 <div className="route-detail-row">
-
-                  <span>
-                    Priority Score
-                  </span>
-
-                  <strong>
-                    {highestPriorityBin.priorityScore}
-                  </strong>
-
-                </div>
-
-              </div>
-
-
-              {/* ROUTE SUMMARY */}
-
-              <div className="route-summary">
-
-                <div>
 
                   <span>
                     Truck Load
@@ -682,31 +854,84 @@ function App() {
 
                 </div>
 
-
-                <div>
+                <div className="route-detail-row">
 
                   <span>
-                    Fuel
+                    Recommended Truck
                   </span>
 
                   <strong>
-                    {currentTruck.fuelPercentage}%
+                    {bestTruck?.truckName ||
+                      "N/A"}
                   </strong>
 
                 </div>
 
+              </div>
 
-                <div>
+              {/* ROUTE STOP LIST */}
 
-                  <span>
-                    Efficiency
-                  </span>
+              <div className="route-stop-list">
 
+                <div className="route-stop-title">
                   <strong>
-                    {currentTruck.fuelEfficiency} km/L
+                    Optimized Collection Sequence
                   </strong>
-
                 </div>
+
+                {smartRoute.route.length === 0 ? (
+
+                  <div className="empty-route">
+                    No suitable bins available.
+                  </div>
+
+                ) : (
+
+                  smartRoute.route.map(
+                    (stop) => (
+
+                      <div
+                        className="route-stop"
+                        key={stop.binId}
+                      >
+
+                        <div className="stop-number">
+                          {stop.sequence}
+                        </div>
+
+                        <div className="stop-info">
+
+                          <strong>
+                            {stop.location}
+                          </strong>
+
+                          <span>
+                            {stop.binId} •{" "}
+                            {stop.wasteKg} kg •{" "}
+                            {stop.fillLevel}%
+                          </span>
+
+                        </div>
+
+                        <div className="stop-distance">
+
+                          <strong>
+                            {stop.distanceFromPreviousKm} km
+                          </strong>
+
+                          <span>
+                            Score{" "}
+                            {stop.priorityScore}
+                          </span>
+
+                        </div>
+
+                      </div>
+
+                    )
+                  )
+
+                )}
 
               </div>
 
@@ -714,21 +939,18 @@ function App() {
 
           </div>
 
-
-          {/* ==================================
+          {/* =================================================
               FOOTER
-          ================================== */}
+          ================================================= */}
 
           <footer className="dashboard-footer">
 
             <span>
-              SmartRoute Intelligent Waste
-              Management System
+              SmartRoute Intelligent Waste Management System
             </span>
 
             <span>
-              AI Route Optimization •
-              Smart City Infrastructure
+              AI Route Optimization • Smart City Infrastructure
             </span>
 
           </footer>

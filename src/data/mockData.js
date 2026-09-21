@@ -22,6 +22,8 @@ export const bins = [
   {
     id: "B001",
     location: "Central Market",
+    trafficLevel: "High",
+    roadCondition: "Good",
     latitude: 10.0121,
     longitude: 76.3212,
     capacityKg: 100,
@@ -41,6 +43,8 @@ export const bins = [
     fillLevel: 72,
     status: "High",
     wasteType: "General Waste",
+    trafficLevel: "Medium",
+    roadCondition: "Good",
   },
 
   {
@@ -53,6 +57,8 @@ export const bins = [
     fillLevel: 45,
     status: "Normal",
     wasteType: "Mixed Waste",
+    trafficLevel: "Medium",
+    roadCondition: "Good",
   },
 
   {
@@ -65,6 +71,8 @@ export const bins = [
     fillLevel: 95,
     status: "Critical",
     wasteType: "Mixed Waste",
+    trafficLevel: "High",
+    roadCondition: "Average",
   },
 
   {
@@ -77,6 +85,8 @@ export const bins = [
     fillLevel: 63,
     status: "High",
     wasteType: "Organic Waste",
+    trafficLevel: "Medium",
+    roadCondition: "Good",
   },
 
   {
@@ -89,6 +99,8 @@ export const bins = [
     fillLevel: 93.5,
     status: "Critical",
     wasteType: "Mixed Waste",
+    trafficLevel: "High",
+    roadCondition: "Poor",
   },
 
   {
@@ -101,6 +113,8 @@ export const bins = [
     fillLevel: 51,
     status: "Moderate",
     wasteType: "General Waste",
+    trafficLevel: "Low",
+    roadCondition: "Good",
   },
 
   {
@@ -113,6 +127,8 @@ export const bins = [
     fillLevel: 87.2,
     status: "High",
     wasteType: "Industrial Waste",
+    trafficLevel: "Medium",
+    roadCondition: "Poor",
   },
 
   {
@@ -125,6 +141,8 @@ export const bins = [
     fillLevel: 28.3,
     status: "Normal",
     wasteType: "General Waste",
+    trafficLevel: "Low",
+    roadCondition: "Good",
   },
 
   {
@@ -137,6 +155,8 @@ export const bins = [
     fillLevel: 76,
     status: "High",
     wasteType: "General Waste",
+    trafficLevel: "High",
+    roadCondition: "Average",
   },
 
   {
@@ -149,6 +169,8 @@ export const bins = [
     fillLevel: 92.7,
     status: "Critical",
     wasteType: "Mixed Waste",
+    trafficLevel: "Medium",
+    roadCondition: "Good",
   },
 
   {
@@ -161,6 +183,8 @@ export const bins = [
     fillLevel: 55.8,
     status: "Moderate",
     wasteType: "Organic Waste",
+    trafficLevel: "Low",
+    roadCondition: "Average",
   },
 ];
 
