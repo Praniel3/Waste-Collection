@@ -18,6 +18,7 @@ import {
 import { getRoadRoute } from "./utils/roadRouting";
 
 function App() {
+  const [activePage, setActivePage] = useState("dashboard");
   const [selectedTruckId, setSelectedTruckId] = useState(
     trucks[0].id
   );
@@ -139,32 +140,86 @@ function App() {
             MAIN
           </div>
 
-          <a className="nav-item active">
+          <a
+            href="#"
+            className={`nav-item ${
+              activePage === "dashboard" ? "active" : ""
+            }`}
+            onClick={(e) => {
+              e.preventDefault();
+              setActivePage("dashboard");
+            }}
+          >
             <span>▣</span>
             <span>Dashboard</span>
           </a>
 
-          <a className="nav-item">
+          <a
+            href="#"
+            className={`nav-item ${
+              activePage === "live-map" ? "active" : ""
+            }`}
+            onClick={(e) => {
+              e.preventDefault();
+              setActivePage("live-map");
+            }}
+          >
             <span>◉</span>
             <span>Live Map</span>
           </a>
 
-          <a className="nav-item">
+          <a
+            href="#"
+            className={`nav-item ${
+              activePage === "trucks" ? "active" : ""
+            }`}
+            onClick={(e) => {
+              e.preventDefault();
+              setActivePage("trucks");
+            }}
+          >
             <span>🚛</span>
             <span>Trucks</span>
           </a>
 
-          <a className="nav-item">
+          <a
+            href="#"
+            className={`nav-item ${
+              activePage === "bins" ? "active" : ""
+            }`}
+            onClick={(e) => {
+              e.preventDefault();
+              setActivePage("bins");
+            }}
+          >
             <span>🗑</span>
             <span>Bins</span>
           </a>
 
-          <a className="nav-item">
+          <a
+            href="#"
+            className={`nav-item ${
+              activePage === "route-planner" ? "active" : ""
+            }`}
+            onClick={(e) => {
+              e.preventDefault();
+              setActivePage("route-planner");
+            }}
+          >
             <span>↗</span>
             <span>Route Planner</span>
           </a>
 
-          <a className="nav-item">
+          <a
+            href="#"
+            className={`nav-item ${
+              activePage === "analytics" ? "active" : ""
+            }`}
+            onClick={(e) => {
+              e.preventDefault();
+              setActivePage("analytics");
+            }}
+          >
             <span>▥</span>
             <span>Analytics</span>
           </a>
